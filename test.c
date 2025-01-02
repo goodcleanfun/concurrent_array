@@ -45,8 +45,6 @@ TEST test_array_push_multithreaded(void) {
     }
 
     ASSERT_EQ(sum, expected_sum);
-    printf("array->n = %zu\n", v->n);
-    printf("sum = %zu\n", sum);
 
     test_concurrent_array_destroy(v);
     PASS();

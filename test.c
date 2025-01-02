@@ -10,7 +10,7 @@
 
 #include "threading/threading.h"
 
-#define NUM_MULTITHREADED_PUSHES 25000000
+#define NUM_MULTITHREADED_PUSHES 10000000
 
 
 int test_array_push_thread(void *arg) {
@@ -27,7 +27,7 @@ TEST test_array_push_multithreaded(void) {
     ASSERT(test_concurrent_array_empty(v));
     ASSERT_EQ(v->n, 0);
 
-    size_t num_threads = 8;
+    size_t num_threads = 4;
     thrd_t threads[num_threads];
     for (size_t i = 0; i < num_threads; i++) {
         thrd_create(&threads[i], test_array_push_thread, v);

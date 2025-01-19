@@ -50,6 +50,50 @@ TEST test_array_push_multithreaded(void) {
     PASS();
 }
 
+#define TEST_CHUNK_SIZE 16
+
+int test_array_extend_thread(void *arg) {
+    test_concurrent_array *v = (test_concurrent_array *)arg;
+    int32_t values[TEST_CHUNK_SIZE];
+    for (size_t i = 0; i < NUM_MULTITHREADED_PUSHES / TEST_CHUNK_SIZE; i++) {
+        for (size_t j = 0; j < TEST_CHUNK_SIZE; j++) {
+            values[j] = (int32_t)(i * TEST_CHUNK_SIZE + j);
+        }
+        ASSERT(test_concurrent_array_extend(v, values, TEST_CHUNK_SIZE));
+    }
+    return 0;
+}
+
+TEST test_array_extend_multithreaded(void) {
+    test_concurrent_array *v = test_concurrent_array_new();
+    ASSERT_EQ(v->m, DEFAULT_ARRAY_SIZE);
+    ASSERT(test_concurrent_array_empty(v));
+    ASSERT_EQ(v->n, 0);
+
+    size_t num_threads = 4;
+    thrd_t threads[num_threads];
+    for (size_t i = 0; i < num_threads; i++) {
+        thrd_create(&threads[i], test_array_extend_thread, v);
+    }
+    for (size_t i = 0; i < num_threads; i++) {
+        thrd_join(threads[i], NULL);
+    }
+
+    ASSERT_EQ(v->n, num_threads * NUM_MULTITHREADED_PUSHES);
+    size_t sum = 0;
+    size_t expected_sum = 0;
+    for (size_t i = 0; i < num_threads * NUM_MULTITHREADED_PUSHES; i++) {
+        sum += (size_t)v->a[i];
+        expected_sum += i % NUM_MULTITHREADED_PUSHES;
+    }
+
+    ASSERT_EQ(sum, expected_sum);
+
+    test_concurrent_array_destroy(v);
+    PASS();
+}
+
+
 /* Add definitions that need to be in the test runner's main file. */
 GREATEST_MAIN_DEFS();
 
@@ -57,6 +101,7 @@ int32_t main(int32_t argc, char **argv) {
     GREATEST_MAIN_BEGIN();      /* command-line options, initialization. */
 
     RUN_TEST(test_array_push_multithreaded);
+    RUN_TEST(test_array_extend_multithreaded);
 
     GREATEST_MAIN_END();        /* display results */
 }

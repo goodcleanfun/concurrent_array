@@ -130,6 +130,30 @@ static inline bool ARRAY_FUNC(push)(ARRAY_NAME *array, ARRAY_TYPE value) {
     return true;
 }
 
+
+static inline bool ARRAY_FUNC(extend)(ARRAY_NAME *array, ARRAY_TYPE *values, size_t n) {
+    size_t start = atomic_fetch_add(&array->i, n);
+    while (start + n >= atomic_load(&array->m)) {
+        if (rwlock_trywrlock(&array->resize_lock) != thrd_busy) {
+            if (!ARRAY_FUNC(resize_to_fit)(array, start + n)) {
+                rwlock_unlock(&array->resize_lock);
+                return false;
+            }
+            rwlock_unlock(&array->resize_lock);
+        } else {
+            thrd_yield();
+        }
+    }
+    if (rwlock_rdlock(&array->resize_lock) == thrd_error) return false;
+    if (memcpy(array->a + start, values, n * sizeof(ARRAY_TYPE)) == NULL) {
+        rwlock_unlock(&array->resize_lock);
+        return false;
+    }
+    rwlock_unlock(&array->resize_lock);
+    atomic_fetch_add(&array->n, n);
+    return true;
+}
+
 static inline bool ARRAY_FUNC(empty)(ARRAY_NAME *array) {
     return atomic_load(&array->n) == 0;
 }

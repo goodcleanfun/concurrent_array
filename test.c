@@ -15,11 +15,30 @@
 
 int test_array_push_thread(void *arg) {
     test_concurrent_array *v = (test_concurrent_array *)arg;
-    for (size_t i = 0; i < NUM_MULTITHREADED_PUSHES; i++) {
-        test_concurrent_array_push(v, i);
+    for (size_t i = 0; i < NUM_MULTITHREADED_PUSHES / 4; i++) {
+        size_t val = i * 4;
+        test_concurrent_array_push(v, val);
+        size_t index;
+
+        val++;
+        test_concurrent_array_push_get_index(v, val, &index);
+        int32_t set_val = val + 1;
+        test_concurrent_array_set(v, index, set_val);
+        int32_t index_val = test_concurrent_array_get_unchecked(v, index);
+        if (index_val != set_val) {
+            printf("error at %zu, %d != %d\n", index, index_val, set_val);
+            return 1;
+        }
+        test_concurrent_array_set(v, index, val);
+
+        val++;
+        test_concurrent_array_push(v, val);
+        val++;
+        test_concurrent_array_push(v, val);
     }
     return 0;
 }
+
 
 TEST test_array_push_multithreaded(void) {
     test_concurrent_array *v = test_concurrent_array_new();
@@ -36,7 +55,7 @@ TEST test_array_push_multithreaded(void) {
         thrd_join(threads[i], NULL);
     }
 
-    ASSERT_EQ(v->n, num_threads * NUM_MULTITHREADED_PUSHES);
+    ASSERT_EQ(test_concurrent_array_len(v), num_threads * NUM_MULTITHREADED_PUSHES);
     size_t sum = 0;
     size_t expected_sum = 0;
     for (size_t i = 0; i < num_threads * NUM_MULTITHREADED_PUSHES; i++) {
@@ -59,7 +78,17 @@ int test_array_extend_thread(void *arg) {
         for (size_t j = 0; j < TEST_CHUNK_SIZE; j++) {
             values[j] = (int32_t)(i * TEST_CHUNK_SIZE + j);
         }
-        ASSERT(test_concurrent_array_extend(v, values, TEST_CHUNK_SIZE));
+        size_t index;
+        test_concurrent_array_extend_get_index(v, values, TEST_CHUNK_SIZE, &index);
+        if (i % 1000 == 0) {
+            for (size_t j = 0; j < TEST_CHUNK_SIZE; j++) {
+                int32_t val = test_concurrent_array_get_unchecked(v, index + j);
+                if (val != values[j]) {
+                    printf("error at %zu, %d != %d\n", index + j, val, values[j]);
+                    return 1;
+                }
+            }
+        }
     }
     return 0;
 }

@@ -31,7 +31,7 @@ jobs:
           make
           sudo make install
       - name: Run tests
-        run: make CC=${{ matrix.compiler }} CFLAGS="-std=c11" LDFLAGS="-pthread" install test
+        run: make CC=${{ matrix.compiler }} CFLAGS="-std=gnu11" LDFLAGS="-pthread" install test
 
   test-macos:
     runs-on: macos-latest

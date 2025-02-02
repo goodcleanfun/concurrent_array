@@ -52,7 +52,7 @@
 
 typedef struct {
     atomic_size_t n, m, i;
-    rwlock_t resize_lock;
+    rwlock_t lock;
     ARRAY_TYPE *a;
 } ARRAY_NAME;
 
@@ -62,7 +62,7 @@ static inline ARRAY_NAME *ARRAY_FUNC(new_size)(size_t size) {
     atomic_init(&array->m, 0);
     atomic_init(&array->n, 0);
     atomic_init(&array->i, 0);
-    rwlock_init(&array->resize_lock, NULL);
+    rwlock_init(&array->lock, NULL);
     array->a = ARRAY_MALLOC((size > 0 ? size : 1) * sizeof(ARRAY_TYPE));
     if (array->a == NULL) return NULL;
     atomic_init(&array->m, size);
@@ -110,48 +110,92 @@ static inline bool ARRAY_FUNC(resize_fixed)(ARRAY_NAME *array, size_t size) {
     return true;
 }
 
-static inline bool ARRAY_FUNC(push)(ARRAY_NAME *array, ARRAY_TYPE value) {
-    size_t i = atomic_fetch_add(&array->i, 1);
-    while (i >= atomic_load(&array->m)) {
-        if (rwlock_trywrlock(&array->resize_lock) != thrd_busy) {
-            if (!ARRAY_FUNC(resize_to_fit)(array, i + 1)) {
-                rwlock_unlock(&array->resize_lock);
-                return false;
-            }
-            rwlock_unlock(&array->resize_lock);
-        } else {
-            thrd_yield();
-        }
-    }
-    if (rwlock_rdlock(&array->resize_lock) == thrd_error) return false;
-    array->a[i] = value;
-    rwlock_unlock(&array->resize_lock);
-    atomic_fetch_add(&array->n, 1);
+static inline ARRAY_TYPE ARRAY_FUNC(get_unchecked)(ARRAY_NAME *array, size_t index) {
+    rwlock_rdlock(&array->lock);
+    ARRAY_TYPE value = array->a[index];
+    rwlock_unlock(&array->lock);
+    return value;
+}
+
+static inline bool ARRAY_FUNC(get)(ARRAY_NAME *array, size_t index, ARRAY_TYPE *value) {
+    if (index >= atomic_load(&array->n)) return false;
+    rwlock_rdlock(&array->lock);
+    *value = array->a[index];
+    rwlock_unlock(&array->lock);
     return true;
 }
 
+static inline bool ARRAY_FUNC(set)(ARRAY_NAME *array, size_t index, ARRAY_TYPE value) {
+    // can technically set if the index count is greater than the number of elements
+    if (index >= atomic_load(&array->i)) return false;
+    // only need a write lock for resize. Writes can happen concurrently
+    rwlock_rdlock(&array->lock);
+    array->a[index] = value;
+    rwlock_unlock(&array->lock);
+    return true;
+}
 
-static inline bool ARRAY_FUNC(extend)(ARRAY_NAME *array, ARRAY_TYPE *values, size_t n) {
-    size_t start = atomic_fetch_add(&array->i, n);
-    while (start + n >= atomic_load(&array->m)) {
-        if (rwlock_trywrlock(&array->resize_lock) != thrd_busy) {
-            if (!ARRAY_FUNC(resize_to_fit)(array, start + n)) {
-                rwlock_unlock(&array->resize_lock);
+static inline bool ARRAY_FUNC(push_get_index)(ARRAY_NAME *array, ARRAY_TYPE value, size_t *index) {
+    size_t i = atomic_fetch_add(&array->i, 1);
+    while (i >= atomic_load(&array->m)) {
+        if (rwlock_trywrlock(&array->lock) != thrd_busy) {
+            if (!ARRAY_FUNC(resize_to_fit)(array, i + 1)) {
+                rwlock_unlock(&array->lock);
                 return false;
             }
-            rwlock_unlock(&array->resize_lock);
+            rwlock_unlock(&array->lock);
         } else {
             thrd_yield();
         }
     }
-    if (rwlock_rdlock(&array->resize_lock) == thrd_error) return false;
+    if (rwlock_rdlock(&array->lock) == thrd_error) return false;
+    array->a[i] = value;
+    rwlock_unlock(&array->lock);
+
+    atomic_fetch_add(&array->n, 1);
+    if (index != NULL) *index = i;
+    return true;
+}
+
+static inline bool ARRAY_FUNC(push)(ARRAY_NAME *array, ARRAY_TYPE value) {
+    return ARRAY_FUNC(push_get_index)(array, value, NULL);
+}
+
+static inline size_t ARRAY_FUNC(capacity)(ARRAY_NAME *array) {
+    return atomic_load(&array->m);
+}
+
+static inline size_t ARRAY_FUNC(len)(ARRAY_NAME *array) {
+    return atomic_load(&array->n);
+}
+
+static inline bool ARRAY_FUNC(extend_get_index)(ARRAY_NAME *array, ARRAY_TYPE *values, size_t n, size_t *index) {
+    size_t start = atomic_fetch_add(&array->i, n);
+    while (start + n >= atomic_load(&array->m)) {
+        if (rwlock_trywrlock(&array->lock) != thrd_busy) {
+            if (!ARRAY_FUNC(resize_to_fit)(array, start + n)) {
+                rwlock_unlock(&array->lock);
+                return false;
+            }
+            rwlock_unlock(&array->lock);
+        } else {
+            thrd_yield();
+        }
+    }
+    if (rwlock_rdlock(&array->lock) == thrd_error) return false;
     if (memcpy(array->a + start, values, n * sizeof(ARRAY_TYPE)) == NULL) {
-        rwlock_unlock(&array->resize_lock);
+        rwlock_unlock(&array->lock);
         return false;
     }
-    rwlock_unlock(&array->resize_lock);
+    rwlock_unlock(&array->lock);
+
     atomic_fetch_add(&array->n, n);
+    if (index != NULL) *index = start;
     return true;
+}
+
+static inline bool ARRAY_FUNC(extend)(ARRAY_NAME *array, ARRAY_TYPE *values, size_t n) {
+    return ARRAY_FUNC(extend_get_index)(array, values, n, NULL);
 }
 
 static inline bool ARRAY_FUNC(empty)(ARRAY_NAME *array) {
@@ -159,8 +203,13 @@ static inline bool ARRAY_FUNC(empty)(ARRAY_NAME *array) {
 }
 
 static inline void ARRAY_FUNC(clear)(ARRAY_NAME *array) {
-    array->n = 0;
+    // need an exclusive lock here
+    rwlock_wrlock(&array->lock);
+    atomic_store(&array->i, 0);
+    atomic_store(&array->n, 0);
+    rwlock_unlock(&array->lock);
 }
+
 
 static inline bool ARRAY_FUNC(copy)(ARRAY_NAME *dst, ARRAY_NAME *src, size_t n) {
     bool ret = true;
@@ -202,7 +251,7 @@ static inline ARRAY_NAME *ARRAY_FUNC(new_zeros)(size_t n) {
 
 static inline void ARRAY_FUNC(destroy)(ARRAY_NAME *array) {
     if (array == NULL) return;
-    rwlock_destroy(&array->resize_lock);
+    rwlock_destroy(&array->lock);
     if (array->a != NULL) {
     #ifdef ARRAY_FREE_DATA
         for (size_t i = 0; i < array->n; i++) {

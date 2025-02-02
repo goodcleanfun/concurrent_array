@@ -39,6 +39,7 @@ int test_array_push_thread(void *arg) {
     return 0;
 }
 
+#define NUM_THREADS 4
 
 TEST test_array_push_multithreaded(void) {
     test_concurrent_array *v = test_concurrent_array_new();
@@ -46,19 +47,18 @@ TEST test_array_push_multithreaded(void) {
     ASSERT(test_concurrent_array_empty(v));
     ASSERT_EQ(v->n, 0);
 
-    size_t num_threads = 4;
-    thrd_t threads[num_threads];
-    for (size_t i = 0; i < num_threads; i++) {
+    thrd_t threads[NUM_THREADS];
+    for (size_t i = 0; i < NUM_THREADS; i++) {
         thrd_create(&threads[i], test_array_push_thread, v);
     }
-    for (size_t i = 0; i < num_threads; i++) {
+    for (size_t i = 0; i < NUM_THREADS; i++) {
         thrd_join(threads[i], NULL);
     }
 
-    ASSERT_EQ(test_concurrent_array_len(v), num_threads * NUM_MULTITHREADED_PUSHES);
+    ASSERT_EQ(test_concurrent_array_len(v), NUM_THREADS * NUM_MULTITHREADED_PUSHES);
     size_t sum = 0;
     size_t expected_sum = 0;
-    for (size_t i = 0; i < num_threads * NUM_MULTITHREADED_PUSHES; i++) {
+    for (size_t i = 0; i < NUM_THREADS * NUM_MULTITHREADED_PUSHES; i++) {
         sum += (size_t)v->a[i];
         expected_sum += i % NUM_MULTITHREADED_PUSHES;
     }
@@ -99,19 +99,18 @@ TEST test_array_extend_multithreaded(void) {
     ASSERT(test_concurrent_array_empty(v));
     ASSERT_EQ(v->n, 0);
 
-    size_t num_threads = 4;
-    thrd_t threads[num_threads];
-    for (size_t i = 0; i < num_threads; i++) {
+    thrd_t threads[NUM_THREADS];
+    for (size_t i = 0; i < NUM_THREADS; i++) {
         thrd_create(&threads[i], test_array_extend_thread, v);
     }
-    for (size_t i = 0; i < num_threads; i++) {
+    for (size_t i = 0; i < NUM_THREADS; i++) {
         thrd_join(threads[i], NULL);
     }
 
-    ASSERT_EQ(v->n, num_threads * NUM_MULTITHREADED_PUSHES);
+    ASSERT_EQ(v->n, NUM_THREADS * NUM_MULTITHREADED_PUSHES);
     size_t sum = 0;
     size_t expected_sum = 0;
-    for (size_t i = 0; i < num_threads * NUM_MULTITHREADED_PUSHES; i++) {
+    for (size_t i = 0; i < NUM_THREADS * NUM_MULTITHREADED_PUSHES; i++) {
         sum += (size_t)v->a[i];
         expected_sum += i % NUM_MULTITHREADED_PUSHES;
     }

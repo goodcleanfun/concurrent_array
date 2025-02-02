@@ -2,7 +2,7 @@ install:
 	clib install --dev
 
 test:
-	@$(CC) test.c $(CLFAGS) -I src -I deps -o $@
+	@$(CC) $(CFLAGS) test.c -I src -I deps -o $@
 	@./$@
 
-.PHONY: test
+.PHONY: install test

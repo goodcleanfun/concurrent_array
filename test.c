@@ -16,9 +16,16 @@
 int test_array_push_thread(void *arg) {
     test_concurrent_array *v = (test_concurrent_array *)arg;
     for (size_t i = 0; i < NUM_MULTITHREADED_PUSHES / 4; i++) {
-        size_t val = i * 4;
+        int32_t val = (int32_t)(i * 4);
         test_concurrent_array_push(v, val);
         size_t index;
+        int32_t iter_val;
+        size_t len;
+        concurrent_array_foreach(v, len, index, iter_val, {
+            if (index >= 10) {
+                break;
+            }
+        });
 
         val++;
         test_concurrent_array_push_get_index(v, val, &index);

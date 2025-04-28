@@ -6,6 +6,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define concurrent_array_foreach(array, len, index, value, code) \
+    rwlock_lock_shared(&array->lock); \
+    len = atomic_load(&array->n); \
+    for (index = 0; index < len; index++) { \
+        value = array->a[index]; \
+        code \
+    } \
+    rwlock_unlock_shared(&array->lock);
+
 #endif // CONCURRENT_ARRAY_H
 
 // Included once per new array type

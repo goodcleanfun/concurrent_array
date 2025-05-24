@@ -145,7 +145,7 @@ static inline bool ARRAY_FUNC(set)(ARRAY_NAME *array, size_t index, ARRAY_TYPE v
 }
 
 static inline bool ARRAY_FUNC(push_get_index)(ARRAY_NAME *array, ARRAY_TYPE value, size_t *index) {
-    size_t i = atomic_fetch_add(&array->i, 1);
+    size_t i = atomic_fetch_add_explicit(&array->i, 1, memory_order_relaxed);
     while (i >= atomic_load(&array->m)) {
         if (rwlock_try_lock_exclusive(&array->lock) != thrd_busy) {
             if (!ARRAY_FUNC(resize_to_fit)(array, i + 1)) {
@@ -161,7 +161,7 @@ static inline bool ARRAY_FUNC(push_get_index)(ARRAY_NAME *array, ARRAY_TYPE valu
     array->a[i] = value;
     rwlock_unlock_shared(&array->lock);
 
-    atomic_fetch_add(&array->n, 1);
+    atomic_fetch_add_explicit(&array->n, 1, memory_order_relaxed);
     if (index != NULL) *index = i;
     return true;
 }
@@ -179,7 +179,7 @@ static inline size_t ARRAY_FUNC(len)(ARRAY_NAME *array) {
 }
 
 static inline bool ARRAY_FUNC(extend_get_index)(ARRAY_NAME *array, ARRAY_TYPE *values, size_t n, size_t *index) {
-    size_t start = atomic_fetch_add(&array->i, n);
+    size_t start = atomic_fetch_add_explicit(&array->i, n, memory_order_relaxed);
     while (start + n >= atomic_load(&array->m)) {
         if (rwlock_try_lock_exclusive(&array->lock) != thrd_busy) {
             if (!ARRAY_FUNC(resize_to_fit)(array, start + n)) {
@@ -198,7 +198,7 @@ static inline bool ARRAY_FUNC(extend_get_index)(ARRAY_NAME *array, ARRAY_TYPE *v
     }
     rwlock_unlock_shared(&array->lock);
 
-    atomic_fetch_add(&array->n, n);
+    atomic_fetch_add_explicit(&array->n, n, memory_order_relaxed);
     if (index != NULL) *index = start;
     return true;
 }

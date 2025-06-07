@@ -62,7 +62,7 @@ TEST test_array_push_multithreaded(void) {
         thrd_join(threads[i], NULL);
     }
 
-    ASSERT_EQ(test_concurrent_array_len(v), NUM_THREADS * NUM_MULTITHREADED_PUSHES);
+    ASSERT_EQ(test_concurrent_array_size(v), NUM_THREADS * NUM_MULTITHREADED_PUSHES);
     size_t sum = 0;
     size_t expected_sum = 0;
     for (size_t i = 0; i < NUM_THREADS * NUM_MULTITHREADED_PUSHES; i++) {

@@ -174,7 +174,7 @@ static inline size_t ARRAY_FUNC(capacity)(ARRAY_NAME *array) {
     return atomic_load(&array->m);
 }
 
-static inline size_t ARRAY_FUNC(len)(ARRAY_NAME *array) {
+static inline size_t ARRAY_FUNC(size)(ARRAY_NAME *array) {
     return atomic_load(&array->n);
 }
 

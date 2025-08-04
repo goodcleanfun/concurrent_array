@@ -6,7 +6,8 @@
     "keywords": [],
     "license": "MIT",
     "dependencies": {
-      "goodcleanfun/threading": "*"
+      "goodcleanfun/threading": "*",
+      "goodcleanfun/rw_ticket_spinlock": "*"
     },
     "development": {
       "silentbicycle/greatest": "*"

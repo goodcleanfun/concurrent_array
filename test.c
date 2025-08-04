@@ -11,7 +11,7 @@
 #include "threading/threading.h"
 
 #define NUM_MULTITHREADED_PUSHES 10000000
-
+#define NUM_THREADS 4
 
 int test_array_push_thread(void *arg) {
     test_concurrent_array *v = (test_concurrent_array *)arg;
@@ -45,8 +45,6 @@ int test_array_push_thread(void *arg) {
     }
     return 0;
 }
-
-#define NUM_THREADS 4
 
 TEST test_array_push_multithreaded(void) {
     test_concurrent_array *v = test_concurrent_array_new();

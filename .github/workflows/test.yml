@@ -75,6 +75,8 @@ jobs:
           curl -L https://github.com/silentbicycle/greatest/raw/release/greatest.h -o deps/greatest/greatest.h
           mkdir -p deps/threading
           curl -L https://raw.githubusercontent.com/goodcleanfun/threading/refs/heads/main/src/threading.h -o deps/threading/threading.h
+          mkdir -p deps/rw_ticket_spinlock
+          curl -L https://raw.githubusercontent.com/goodcleanfun/rw_ticket_spinlock/refs/heads/main/src/rw_ticket_spinlock.h -o deps/rw_ticket_spinlock/rw_ticket_spinlock.h
       - name: Build and Test with MinGW
         run: |
           make CC=gcc CFLAGS="-std=c11" LDFLAGS="-latomic" test

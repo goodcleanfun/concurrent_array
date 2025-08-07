@@ -153,7 +153,7 @@ static inline bool ARRAY_FUNC(set)(ARRAY_NAME *array, size_t index, ARRAY_TYPE v
 
 static inline bool ARRAY_FUNC(push_get_index)(ARRAY_NAME *array, ARRAY_TYPE value, size_t *index) {
     size_t i = atomic_fetch_add_explicit(&array->i, 1, memory_order_relaxed);
-    while (i >= atomic_load(&array->m)) {
+    while (i >= atomic_load_explicit(&array->m, memory_order_relaxed)) {
         rw_ticket_spinlock_write_lock(&array->lock);
         if (!ARRAY_FUNC(resize_to_fit)(array, i + 1)) {
             rw_ticket_spinlock_write_unlock(&array->lock);
@@ -165,7 +165,7 @@ static inline bool ARRAY_FUNC(push_get_index)(ARRAY_NAME *array, ARRAY_TYPE valu
     array->a[i] = value;
     rw_ticket_spinlock_read_unlock(&array->lock);
 
-    atomic_fetch_add_explicit(&array->n, 1, memory_order_relaxed);
+    atomic_fetch_add(&array->n, 1);
     if (index != NULL) *index = i;
     return true;
 }
@@ -184,7 +184,7 @@ static inline size_t ARRAY_FUNC(size)(ARRAY_NAME *array) {
 
 static inline bool ARRAY_FUNC(extend_get_index)(ARRAY_NAME *array, ARRAY_TYPE *values, size_t n, size_t *index) {
     size_t start = atomic_fetch_add_explicit(&array->i, n, memory_order_relaxed);
-    while (start + n >= atomic_load(&array->m)) {
+    while (start + n >= atomic_load_explicit(&array->m, memory_order_relaxed)) {
         rw_ticket_spinlock_write_lock(&array->lock);
         if (!ARRAY_FUNC(resize_to_fit)(array, start + n)) {
             rw_ticket_spinlock_write_unlock(&array->lock);
@@ -199,7 +199,7 @@ static inline bool ARRAY_FUNC(extend_get_index)(ARRAY_NAME *array, ARRAY_TYPE *v
     }
     rw_ticket_spinlock_read_unlock(&array->lock);
 
-    atomic_fetch_add_explicit(&array->n, n, memory_order_relaxed);
+    atomic_fetch_add(&array->n, n);
     if (index != NULL) *index = start;
     return true;
 }

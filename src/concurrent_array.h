@@ -90,12 +90,27 @@ static inline ARRAY_NAME *ARRAY_FUNC(new_size)(size_t size) {
     return array;
 }
 
+static inline ARRAY_NAME *ARRAY_FUNC(new_size_fixed)(size_t size) {
+    ARRAY_NAME *array = ARRAY_FUNC(new_size)(size);
+    if (array == NULL) return NULL;
+    atomic_store(&array->n, size);
+    return array;
+}
+
 static inline ARRAY_NAME *ARRAY_FUNC(new)(void) {
     return ARRAY_FUNC(new_size)(DEFAULT_ARRAY_SIZE);
 }
 
 
-static inline bool ARRAY_FUNC(resize_no_check)(ARRAY_NAME *array, size_t size) {
+static inline bool ARRAY_FUNC(resize_impl)(ARRAY_NAME *array, size_t size, bool fixed) {
+    if (array == NULL) return false;
+    rw_ticket_spinlock_write_lock(&array->lock);
+    size_t cap = atomic_load(&array->m);
+    if (size <= cap) {
+        rw_ticket_spinlock_write_unlock(&array->lock);
+        return true;
+    }
+
     #ifndef ARRAY_REALLOC_NEEDS_PREV_SIZE
     ARRAY_TYPE *ptr = ARRAY_REALLOC(array->a, sizeof(ARRAY_TYPE) * size);
     #else
@@ -103,18 +118,21 @@ static inline bool ARRAY_FUNC(resize_no_check)(ARRAY_NAME *array, size_t size) {
     #endif
 
     if (ptr == NULL) {
+        rw_ticket_spinlock_write_unlock(&array->lock);
         return false;
     }
     array->a = ptr;
     atomic_store(&array->m, size);
+    if (fixed) {
+        atomic_store(&array->n, size);
+    }
+    rw_ticket_spinlock_write_unlock(&array->lock);
     return true;
 }
 
 static inline bool ARRAY_FUNC(resize)(ARRAY_NAME *array, size_t size) {
-    size_t cap = atomic_load(&array->m);
-
-    if (size <= cap) return true;
-    return ARRAY_FUNC(resize_no_check)(array, size);
+    bool fixed = false;
+    return ARRAY_FUNC(resize_impl)(array, size, false);
 }
 
 static inline bool ARRAY_FUNC(resize_to_fit)(ARRAY_NAME *array, size_t needed_capacity) {
@@ -127,13 +145,13 @@ static inline bool ARRAY_FUNC(resize_to_fit)(ARRAY_NAME *array, size_t needed_ca
         if (cap == prev_cap) cap++;
         prev_cap = cap;
     }
-    return ARRAY_FUNC(resize_no_check)(array, cap);
+    bool fixed = false;
+    return ARRAY_FUNC(resize_impl)(array, cap, fixed);
 }
 
 static inline bool ARRAY_FUNC(resize_fixed)(ARRAY_NAME *array, size_t size) {
-    if (!ARRAY_FUNC(resize)(array, size)) return false;
-    array->n = size;
-    return true;
+    bool fixed = true;
+    return ARRAY_FUNC(resize_impl)(array, size, fixed);
 }
 
 static inline ARRAY_TYPE ARRAY_FUNC(get_unchecked)(ARRAY_NAME *array, size_t index) {
@@ -170,12 +188,9 @@ static inline void ARRAY_FUNC(set_unchecked)(ARRAY_NAME *array, size_t index, AR
 static inline bool ARRAY_FUNC(push_get_index)(ARRAY_NAME *array, ARRAY_TYPE value, size_t *index) {
     size_t i = atomic_fetch_add_explicit(&array->i, 1, memory_order_relaxed);
     while (i >= atomic_load_explicit(&array->m, memory_order_relaxed)) {
-        rw_ticket_spinlock_write_lock(&array->lock);
         if (!ARRAY_FUNC(resize_to_fit)(array, i + 1)) {
-            rw_ticket_spinlock_write_unlock(&array->lock);
             return false;
         }
-        rw_ticket_spinlock_write_unlock(&array->lock);
     }
     rw_ticket_spinlock_read_lock(&array->lock);
     array->a[i] = value;
@@ -201,12 +216,9 @@ static inline size_t ARRAY_FUNC(size)(ARRAY_NAME *array) {
 static inline bool ARRAY_FUNC(extend_get_index)(ARRAY_NAME *array, ARRAY_TYPE *values, size_t n, size_t *index) {
     size_t start = atomic_fetch_add_explicit(&array->i, n, memory_order_relaxed);
     while (start + n >= atomic_load_explicit(&array->m, memory_order_relaxed)) {
-        rw_ticket_spinlock_write_lock(&array->lock);
         if (!ARRAY_FUNC(resize_to_fit)(array, start + n)) {
-            rw_ticket_spinlock_write_unlock(&array->lock);
             return false;
         }
-        rw_ticket_spinlock_write_unlock(&array->lock);
     }
     rw_ticket_spinlock_read_lock(&array->lock);
     if (memcpy(array->a + start, values, n * sizeof(ARRAY_TYPE)) == NULL) {

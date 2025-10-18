@@ -124,6 +124,7 @@ static inline bool ARRAY_FUNC(resize_impl)(ARRAY_NAME *array, size_t size, bool 
     array->a = ptr;
     atomic_store(&array->m, size);
     if (fixed) {
+        atomic_store(&array->i, size);
         atomic_store(&array->n, size);
     }
     rw_ticket_spinlock_write_unlock(&array->lock);

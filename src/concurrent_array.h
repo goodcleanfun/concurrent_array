@@ -161,6 +161,12 @@ static inline bool ARRAY_FUNC(set)(ARRAY_NAME *array, size_t index, ARRAY_TYPE v
     return true;
 }
 
+static inline void ARRAY_FUNC(set_unchecked)(ARRAY_NAME *array, size_t index, ARRAY_TYPE value) {
+    rw_ticket_spinlock_read_lock(&array->lock);
+    array->a[index] = value;
+    rw_ticket_spinlock_read_unlock(&array->lock);
+}
+
 static inline bool ARRAY_FUNC(push_get_index)(ARRAY_NAME *array, ARRAY_TYPE value, size_t *index) {
     size_t i = atomic_fetch_add_explicit(&array->i, 1, memory_order_relaxed);
     while (i >= atomic_load_explicit(&array->m, memory_order_relaxed)) {

@@ -6,6 +6,7 @@
     "keywords": [],
     "license": "MIT",
     "dependencies": {
+      "goodcleanfun/aligned": "*",
       "goodcleanfun/threading": "*",
       "goodcleanfun/rw_ticket_spinlock": "*",
       "goodcleanfun/likely": "*"

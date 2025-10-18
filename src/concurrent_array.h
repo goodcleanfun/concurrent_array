@@ -39,18 +39,28 @@
 #endif
 
 #ifndef ARRAY_MALLOC
-#define ARRAY_MALLOC malloc
 #define ARRAY_MALLOC_DEFINED
+#ifndef ARRAY_ALIGNMENT
+#define ARRAY_MALLOC(size) cache_line_aligned_malloc(size)
+#else
+#define ARRAY_MALLOC(size) aligned_malloc(size, ARRAY_ALIGNMENT)
+#endif
 #endif
 
+#define ARRAY_REALLOC_NEEDS_PREV_SIZE
+
 #ifndef ARRAY_REALLOC
-#define ARRAY_REALLOC realloc
 #define ARRAY_REALLOC_DEFINED
+#ifndef ARRAY_ALIGNMENT
+#define ARRAY_REALLOC(a, prev_size, new_size) cache_line_aligned_resize(a, prev_size, new_size)
+#else
+#define ARRAY_REALLOC(a, prev_size, new_size) aligned_resize(a, prev_size, new_size, ARRAY_ALIGNMENT)
+#endif
 #endif
 
 #ifndef ARRAY_FREE
-#define ARRAY_FREE free
 #define ARRAY_FREE_DEFINED
+#define ARRAY_FREE(a) default_aligned_free(a)
 #endif
 
 #include <stdatomic.h>
@@ -89,7 +99,7 @@ static inline bool ARRAY_FUNC(resize_no_check)(ARRAY_NAME *array, size_t size) {
     #ifndef ARRAY_REALLOC_NEEDS_PREV_SIZE
     ARRAY_TYPE *ptr = ARRAY_REALLOC(array->a, sizeof(ARRAY_TYPE) * size);
     #else
-    ARRAY_TYPE *ptr = ARRAY_REALLOC(array->a, sizeof(ARRAY_TYPE) * cap, sizeof(ARRAY_TYPE) * size);
+    ARRAY_TYPE *ptr = ARRAY_REALLOC(array->a, sizeof(ARRAY_TYPE) * array->m, sizeof(ARRAY_TYPE) * size);
     #endif
 
     if (ptr == NULL) {

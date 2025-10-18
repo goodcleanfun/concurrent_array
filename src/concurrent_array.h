@@ -94,6 +94,7 @@ static inline ARRAY_NAME *ARRAY_FUNC(new_size_fixed)(size_t size) {
     ARRAY_NAME *array = ARRAY_FUNC(new_size)(size);
     if (array == NULL) return NULL;
     atomic_store(&array->n, size);
+    atomic_store(&array->i, size);
     return array;
 }
 

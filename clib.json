@@ -1,6 +1,6 @@
 {
     "name": "concurrent_array",
-    "version": "0.6.0",
+    "version": "0.6.1",
     "repo": "goodcleanfun/concurrent_array",
     "description": "High-performance concurrent/thread-safe generic dynamic array. Currently supports push operations and using read-write locks only for resizing and C11 atomics to ensure multiple writers get unique indices during a non-resize push.",
     "keywords": [],

@@ -40,27 +40,37 @@
 
 #ifndef ARRAY_MALLOC
 #define ARRAY_MALLOC_DEFINED
+#define ARRAY_MALLOC(size) malloc(size)
+#endif
+
+#ifndef ARRAY_DATA_MALLOC
+#define ARRAY_DATA_MALLOC_DEFINED
 #ifndef ARRAY_ALIGNMENT
-#define ARRAY_MALLOC(size) cache_line_aligned_malloc(size)
+#define ARRAY_DATA_MALLOC(size) cache_line_aligned_malloc(size)
 #else
-#define ARRAY_MALLOC(size) aligned_malloc(size, ARRAY_ALIGNMENT)
+#define ARRAY_DATA_MALLOC(size) aligned_malloc(size, ARRAY_ALIGNMENT)
 #endif
 #endif
 
-#define ARRAY_REALLOC_NEEDS_PREV_SIZE
+#define ARRAY_DATA_REALLOC_NEEDS_PREV_SIZE
 
-#ifndef ARRAY_REALLOC
-#define ARRAY_REALLOC_DEFINED
+#ifndef ARRAY_DATA_REALLOC
+#define ARRAY_DATA_REALLOC_DEFINED
 #ifndef ARRAY_ALIGNMENT
-#define ARRAY_REALLOC(a, prev_size, new_size) cache_line_aligned_resize(a, prev_size, new_size)
+#define ARRAY_DATA_REALLOC(a, prev_size, new_size) cache_line_aligned_resize(a, prev_size, new_size)
 #else
-#define ARRAY_REALLOC(a, prev_size, new_size) aligned_resize(a, prev_size, new_size, ARRAY_ALIGNMENT)
+#define ARRAY_DATA_REALLOC(a, prev_size, new_size) aligned_resize(a, prev_size, new_size, ARRAY_ALIGNMENT)
 #endif
+#endif
+
+#ifndef ARRAY_DATA_FREE
+#define ARRAY_DATA_FREE_DEFINED
+#define ARRAY_DATA_FREE(a) default_aligned_free(a)
 #endif
 
 #ifndef ARRAY_FREE
 #define ARRAY_FREE_DEFINED
-#define ARRAY_FREE(a) default_aligned_free(a)
+#define ARRAY_FREE(a) free(a)
 #endif
 
 #include <stdatomic.h>
@@ -78,13 +88,13 @@ typedef struct {
 } ARRAY_NAME;
 
 static inline ARRAY_NAME *ARRAY_FUNC(new_size)(size_t size) {
-    ARRAY_NAME *array = malloc(sizeof(ARRAY_NAME));
+    ARRAY_NAME *array = ARRAY_MALLOC(sizeof(ARRAY_NAME));
     if (array == NULL) return NULL;
     atomic_init(&array->m, 0);
     atomic_init(&array->n, 0);
     atomic_init(&array->i, 0);
     rw_ticket_spinlock_init(&array->lock);
-    array->a = ARRAY_MALLOC((size > 0 ? size : 1) * sizeof(ARRAY_TYPE));
+    array->a = ARRAY_DATA_MALLOC((size > 0 ? size : 1) * sizeof(ARRAY_TYPE));
     if (array->a == NULL) return NULL;
     atomic_init(&array->m, size);
     return array;
@@ -112,10 +122,10 @@ static inline bool ARRAY_FUNC(resize_impl)(ARRAY_NAME *array, size_t size, bool 
         return true;
     }
 
-    #ifndef ARRAY_REALLOC_NEEDS_PREV_SIZE
-    ARRAY_TYPE *ptr = ARRAY_REALLOC(array->a, sizeof(ARRAY_TYPE) * size);
+    #ifndef ARRAY_DATA_REALLOC_NEEDS_PREV_SIZE
+    ARRAY_TYPE *ptr = ARRAY_DATA_REALLOC(array->a, sizeof(ARRAY_TYPE) * size);
     #else
-    ARRAY_TYPE *ptr = ARRAY_REALLOC(array->a, sizeof(ARRAY_TYPE) * array->m, sizeof(ARRAY_TYPE) * size);
+    ARRAY_TYPE *ptr = ARRAY_DATA_REALLOC(array->a, sizeof(ARRAY_TYPE) * array->m, sizeof(ARRAY_TYPE) * size);
     #endif
 
     if (ptr == NULL) {
@@ -216,8 +226,8 @@ static inline size_t ARRAY_FUNC(size)(ARRAY_NAME *array) {
 }
 
 static inline bool ARRAY_FUNC(extend_get_index)(ARRAY_NAME *array, ARRAY_TYPE *values, size_t n, size_t *index) {
-    size_t start = atomic_fetch_add_explicit(&array->i, n, memory_order_relaxed);
-    while (start + n >= atomic_load_explicit(&array->m, memory_order_relaxed)) {
+    size_t start = atomic_fetch_add(&array->i, n);
+    while (start + n >= atomic_load(&array->m)) {
         if (!ARRAY_FUNC(resize_to_fit)(array, start + n)) {
             return false;
         }
@@ -294,14 +304,14 @@ static inline ARRAY_NAME *ARRAY_FUNC(new_zeros)(size_t n) {
 static inline void ARRAY_FUNC(destroy)(ARRAY_NAME *array) {
     if (array == NULL) return;
     if (array->a != NULL) {
-    #ifdef ARRAY_FREE_DATA
+    #ifdef ARRAY_DATA_FREE_ELEMENT
         for (size_t i = 0; i < array->n; i++) {
-            ARRAY_FREE_DATA(array->a[i]);
+            ARRAY_DATA_FREE_ELEMENT(array->a[i]);
         }
     #endif
-        ARRAY_FREE(array->a);
+        ARRAY_DATA_FREE(array->a);
     }
-    free(array);
+    ARRAY_FREE(array);
 }
 
 #undef CONCAT_
@@ -311,13 +321,17 @@ static inline void ARRAY_FUNC(destroy)(ARRAY_NAME *array) {
 #undef NO_DEFAULT_ARRAY_SIZE
 #undef DEFAULT_ARRAY_SIZE
 #endif
-#ifdef ARRAY_MALLOC_DEFINED
-#undef ARRAY_MALLOC
-#undef ARRAY_MALLOC_DEFINED
+#ifdef ARRAY_DATA_MALLOC_DEFINED
+#undef ARRAY_DATA_MALLOC
+#undef ARRAY_DATA_MALLOC_DEFINED
 #endif
-#ifdef ARRAY_REALLOC_DEFINED
-#undef ARRAY_REALLOC
-#undef ARRAY_REALLOC_DEFINED
+#ifdef ARRAY_DATA_REALLOC_DEFINED
+#undef ARRAY_DATA_REALLOC
+#undef ARRAY_DATA_REALLOC_DEFINED
+#endif
+#ifdef ARRAY_DATA_FREE_DEFINED
+#undef ARRAY_DATA_FREE
+#undef ARRAY_DATA_FREE_DEFINED
 #endif
 #ifdef ARRAY_FREE_DEFINED
 #undef ARRAY_FREE
